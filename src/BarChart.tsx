@@ -1,4 +1,10 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   select,
   axisLeft,
@@ -11,23 +17,44 @@ import {
 
 import styles from "./BarChart.module.css";
 
-const data = [1, 5, 2, 3, 7, 5, 3, 74];
-
-// Hard coding the axis co-ordinates for now; normally
-// would measure their width/height
-const X_AXIS_OFFSET = 30;
+// Hard coding the x axis height - without line breaks, this
+// is probably ok
+const X_AXIS_HEIGHT = 30;
 
 const validateExtent = (
   result: [undefined, undefined] | [number, number]
 ): result is [number, number] =>
   Number.isFinite(result[0]) && Number.isFinite(result[1]);
 
-const BarChart: React.FC = () => {
+interface Props {
+  data: number[];
+}
+
+const BarChart: React.FC<Props> = ({ data }) => {
   const [, setStateToggle] = useState(false);
   const svgRoot = useRef<SVGSVGElement | null>(null);
   const xAxisElement = useRef<SVGGElement | null>(null);
   const yAxisElement = useRef<SVGGElement | null>(null);
   const plotAreaElement = useRef<SVGGElement | null>(null);
+
+  const xScale = useMemo(() => scalePoint<number>(), []);
+  const yScale = useMemo(() => scaleLinear(), []);
+  const xAxis = useMemo(() => axisBottom(xScale), [xScale]);
+  const yAxis = useMemo(() => axisLeft(yScale), [yScale]);
+
+  // Update scales as required
+  useLayoutEffect(() => {
+    xScale.domain(
+      Array(data.length + 1)
+        .fill(0)
+        .map((d, i) => i)
+    );
+
+    const yExtent = extent(data);
+    if (validateExtent(yExtent)) {
+      yScale.domain([Math.min(0, yExtent[0]), yExtent[1]]);
+    }
+  }, [data, xScale, yScale, xAxis, yAxis]);
 
   useLayoutEffect(() => {
     if (
@@ -40,42 +67,35 @@ const BarChart: React.FC = () => {
     }
 
     const { width, height } = svgRoot.current?.getBoundingClientRect();
-    const rootSelection = select(svgRoot.current);
 
+    const rootSelection = select(svgRoot.current);
     rootSelection.attr("width", width).attr("height", height);
 
-    // Note that a lot about this isn't performant. It's recalculating the domain/range each time and not
-    // when the data updates.
-    const yExtent = extent(data);
+    yScale.range([height - X_AXIS_HEIGHT, 0]);
 
-    if (!validateExtent(yExtent)) {
-      return;
-    }
-
-    const yScale = scaleLinear([height - X_AXIS_OFFSET, 0]).domain([
-      Math.min(0, yExtent[0]),
-      yExtent[1],
-    ]);
-    const yAxis = axisLeft(yScale);
+    // Render the Y axis, measure it, and resize the X axis accordingly
     const yAxisG = select(yAxisElement.current).call(yAxis);
     const yAxisWidth = yAxisElement.current.getBBox().width;
     const plotAreaWidth = width - yAxisWidth;
 
     yAxisG.attr("transform", `translate(${yAxisWidth} 0)`);
+    xScale.range([0, plotAreaWidth]);
 
-    const xScale = scalePoint<number>()
-      .domain(
-        Array(data.length + 1)
-          .fill(0)
-          .map((d, i) => i)
-      )
-      .range([0, plotAreaWidth]);
-    const xAxis = axisBottom(xScale);
+    // Reduce the number of tick labels to 1 per 100px
+    const tickWidth = plotAreaWidth / data.length;
+    const tickLabelFrequency = tickWidth < 100 ? Math.ceil(100 / tickWidth) : 1;
+    xAxis.tickFormat((d, i) =>
+      i % tickLabelFrequency === 0 ? i.toString() : ""
+    );
 
     const xOrigin = yScale(0);
-    select(xAxisElement.current)
+    const xAxisG = select(xAxisElement.current)
       .call(xAxis)
       .attr("transform", `translate(${yAxisWidth} ${xOrigin})`);
+
+    xAxisG
+      .selectAll(".tick text")
+      .attr("transform", `translate(${tickWidth / 2} 0)`);
 
     const plotArea = select(plotAreaElement.current).attr(
       "transform",
@@ -91,6 +111,7 @@ const BarChart: React.FC = () => {
       .append("rect")
       .classed("rect", true)
       .attr("fill", schemeCategory10[0])
+      .attr("shape-rendering", "crispEdges")
       .merge(rect)
       .attr("x", (d, i) => xScale(i) ?? "")
       .attr("width", plotAreaWidth / (data.length || 1))

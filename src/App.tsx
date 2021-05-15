@@ -6,12 +6,20 @@ function App() {
   const [data, setData] = useState<number[]>([]);
 
   useEffect(() => {
-    const handle = window.setInterval(
-      () => setData((data) => [...data, -500 + Math.random() * 2000]),
+    const getValue = () => -500 + Math.random() * 2000;
+    const addDataHandle = window.setInterval(
+      () => setData((data) => [...data, getValue()]),
       200
     );
+    const resetDataHandle = window.setInterval(
+      () => setData(Array(25).fill(0).map(getValue)),
+      30000
+    );
 
-    return () => window.clearInterval(handle);
+    return () => {
+      window.clearInterval(addDataHandle);
+      window.clearInterval(resetDataHandle);
+    };
   }, []);
 
   return (

@@ -30,7 +30,12 @@ interface Props {
 }
 
 const BarChart: React.FC<Props> = ({ data }) => {
-  const [, setStateToggle] = useState(false);
+  const [, renderToggle] = useState(false);
+
+  const [plotAreaWidth, setPlotAreaWidth] = useState(0);
+  const [tickWidth, setTickWidth] = useState(0);
+  const [yAxisWidth, setYAxisWidth] = useState(0);
+
   const svgRoot = useRef<SVGSVGElement | null>(null);
   const xAxisElement = useRef<SVGGElement | null>(null);
   const yAxisElement = useRef<SVGGElement | null>(null);
@@ -40,6 +45,14 @@ const BarChart: React.FC<Props> = ({ data }) => {
   const yScale = useMemo(() => scaleLinear(), []);
   const xAxis = useMemo(() => axisBottom(xScale), [xScale]);
   const yAxis = useMemo(() => axisLeft(yScale), [yScale]);
+
+  const { width, height } = svgRoot.current?.getBoundingClientRect() ?? {
+    width: 0,
+    height: 0,
+  };
+  const xOrigin = yScale(0);
+
+  xScale.range([0, plotAreaWidth]);
 
   // Update scales as required
   useLayoutEffect(() => {
@@ -65,58 +78,35 @@ const BarChart: React.FC<Props> = ({ data }) => {
       return;
     }
 
-    const { width, height } = svgRoot.current?.getBoundingClientRect();
-
-    const rootSelection = select(svgRoot.current);
-    rootSelection.attr("width", width).attr("height", height);
-
     yScale.range([height - X_AXIS_HEIGHT, 0]);
 
     // Render the Y axis, measure it, and resize the X axis accordingly
-    const yAxisG = select(yAxisElement.current).call(yAxis);
+    select(yAxisElement.current).call(yAxis);
     const yAxisWidth = yAxisElement.current.getBBox().width;
     const plotAreaWidth = width - yAxisWidth;
-
-    yAxisG.attr("transform", `translate(${yAxisWidth} 0)`);
-    xScale.range([0, plotAreaWidth]);
+    const tickWidth = plotAreaWidth / (data.length || 1);
 
     // Reduce the number of tick labels to 1 per 100px
-    const tickWidth = plotAreaWidth / (data.length || 1);
     const tickLabelFrequency = tickWidth < 100 ? Math.ceil(100 / tickWidth) : 1;
     xAxis.tickFormat((d, i) =>
       i % tickLabelFrequency === 0 ? i.toString() : ""
     );
 
-    const xOrigin = yScale(0);
-    const xAxisG = select(xAxisElement.current)
+    select(xAxisElement.current)
       .call(xAxis)
-      .attr("transform", `translate(${yAxisWidth} ${xOrigin})`);
-
-    xAxisG
       .selectAll(".tick text")
       .attr("transform", `translate(${tickWidth / 2} 0)`);
 
-    const plotArea = select(plotAreaElement.current).attr(
-      "transform",
-      `translate(${yAxisWidth} 0)`
-    );
-
-    const rect = plotArea
-      .selectAll<SVGRectElement, number[]>(`.${styles.rect}`)
-      .data(data);
-
-    // Bonus: the rects are added by react below, we just need to position/style
-    rect
-      .attr("x", (d, i) => xScale(i) ?? "")
-      .attr("width", tickWidth)
-      .attr("y", (d) => (d < 0 ? xOrigin : yScale(d)))
-      .attr("height", (d) => Math.abs(xOrigin - yScale(d)));
-  });
+    // Update react state, triggers re-render if different.
+    setYAxisWidth(yAxisWidth);
+    setPlotAreaWidth(plotAreaWidth);
+    setTickWidth(tickWidth);
+  }, [width, height, yScale, yAxis, xScale, xAxis, data]);
 
   useEffect(() => {
     // Update state to trigger a re-render on resize. Will be a better way
     // to handle this, but it's a POC
-    const callback = () => setStateToggle((value) => !value);
+    const callback = () => renderToggle((value) => !value);
 
     window.addEventListener("resize", callback);
 
@@ -124,14 +114,33 @@ const BarChart: React.FC<Props> = ({ data }) => {
   }, []);
 
   return (
-    <svg className={styles.chart} ref={svgRoot}>
-      <g className="plot-area" ref={plotAreaElement}>
+    <svg className={styles.chart} ref={svgRoot} width={width} height={height}>
+      <g
+        className="plot-area"
+        ref={plotAreaElement}
+        transform={`translate(${yAxisWidth} 0)`}
+      >
         {data.map((d, i) => (
-          <rect key={i} className={styles.rect} />
+          <rect
+            key={i}
+            className={styles.rect}
+            width={tickWidth}
+            x={xScale(i)}
+            y={d < 0 ? xOrigin : yScale(d)}
+            height={Math.abs(xOrigin - yScale(d))}
+          />
         ))}
       </g>
-      <g className="x-axis" ref={xAxisElement} />
-      <g className="y-axis" ref={yAxisElement} />
+      <g
+        className="x-axis"
+        ref={xAxisElement}
+        transform={`translate(${yAxisWidth} ${xOrigin})`}
+      />
+      <g
+        className="y-axis"
+        ref={yAxisElement}
+        transform={`translate(${yAxisWidth} 0)`}
+      />
     </svg>
   );
 };

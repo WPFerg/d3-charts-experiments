@@ -6,13 +6,12 @@ import React, {
   useState,
 } from "react";
 import {
-  select,
-  axisLeft,
   axisBottom,
+  axisLeft,
+  extent,
   scaleLinear,
   scalePoint,
-  extent,
-  schemeCategory10,
+  select,
 } from "d3";
 
 import styles from "./BarChart.module.css";
@@ -103,15 +102,13 @@ const BarChart: React.FC<Props> = ({ data }) => {
     );
 
     const rect = plotArea
-      .selectAll<SVGRectElement, number[]>(".rect")
+      .selectAll<SVGRectElement, number[]>(`.${styles.rect}`)
       .data(data);
 
     rect
       .enter()
       .append("rect")
-      .classed("rect", true)
-      .attr("fill", schemeCategory10[0])
-      .attr("shape-rendering", "crispEdges")
+      .classed(styles.rect, true)
       .merge(rect)
       .attr("x", (d, i) => xScale(i) ?? "")
       .attr("width", plotAreaWidth / (data.length || 1))

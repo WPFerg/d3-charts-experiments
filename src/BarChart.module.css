@@ -2,3 +2,8 @@
     width: 100%;
     height: 500px;
 }
+
+.rect {
+    fill: #ff1493;
+    shape-rendering: crispEdges;
+}

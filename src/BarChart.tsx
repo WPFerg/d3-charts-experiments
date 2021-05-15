@@ -81,7 +81,7 @@ const BarChart: React.FC<Props> = ({ data }) => {
     xScale.range([0, plotAreaWidth]);
 
     // Reduce the number of tick labels to 1 per 100px
-    const tickWidth = plotAreaWidth / data.length;
+    const tickWidth = plotAreaWidth / (data.length || 1);
     const tickLabelFrequency = tickWidth < 100 ? Math.ceil(100 / tickWidth) : 1;
     xAxis.tickFormat((d, i) =>
       i % tickLabelFrequency === 0 ? i.toString() : ""
@@ -105,17 +105,12 @@ const BarChart: React.FC<Props> = ({ data }) => {
       .selectAll<SVGRectElement, number[]>(`.${styles.rect}`)
       .data(data);
 
+    // Bonus: the rects are added by react below, we just need to position/style
     rect
-      .enter()
-      .append("rect")
-      .classed(styles.rect, true)
-      .merge(rect)
       .attr("x", (d, i) => xScale(i) ?? "")
-      .attr("width", plotAreaWidth / (data.length || 1))
+      .attr("width", tickWidth)
       .attr("y", (d) => (d < 0 ? xOrigin : yScale(d)))
       .attr("height", (d) => Math.abs(xOrigin - yScale(d)));
-
-    rect.exit().remove();
   });
 
   useEffect(() => {
@@ -130,7 +125,11 @@ const BarChart: React.FC<Props> = ({ data }) => {
 
   return (
     <svg className={styles.chart} ref={svgRoot}>
-      <g className="plot-area" ref={plotAreaElement} />
+      <g className="plot-area" ref={plotAreaElement}>
+        {data.map((d, i) => (
+          <rect key={i} className={styles.rect} />
+        ))}
+      </g>
       <g className="x-axis" ref={xAxisElement} />
       <g className="y-axis" ref={yAxisElement} />
     </svg>

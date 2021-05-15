@@ -115,8 +115,8 @@ const BarChart: React.FC<Props> = ({ data }) => {
       .merge(rect)
       .attr("x", (d, i) => xScale(i) ?? "")
       .attr("width", plotAreaWidth / (data.length || 1))
-      .attr("y", (d) => yScale(d))
-      .attr("height", (d) => xOrigin - yScale(d));
+      .attr("y", (d) => (d < 0 ? xOrigin : yScale(d)))
+      .attr("height", (d) => Math.abs(xOrigin - yScale(d)));
 
     rect.exit().remove();
   });
@@ -133,9 +133,9 @@ const BarChart: React.FC<Props> = ({ data }) => {
 
   return (
     <svg className={styles.chart} ref={svgRoot}>
+      <g className="plot-area" ref={plotAreaElement} />
       <g className="x-axis" ref={xAxisElement} />
       <g className="y-axis" ref={yAxisElement} />
-      <g className="plot-area" ref={plotAreaElement} />
     </svg>
   );
 };

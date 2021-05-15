@@ -3,11 +3,11 @@ import "./App.css";
 import BarChart from "./BarChart";
 
 function App() {
-  const [data, setData] = useState<number[]>([10]);
+  const [data, setData] = useState<number[]>([]);
 
   useEffect(() => {
     const handle = window.setInterval(
-      () => setData((data) => [...data, Math.random() * 200]),
+      () => setData((data) => [...data, -500 + Math.random() * 2000]),
       200
     );
 

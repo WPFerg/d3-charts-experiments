@@ -1,20 +1,8 @@
-import React, {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  axisBottom,
-  axisLeft,
-  extent,
-  scaleLinear,
-  scalePoint,
-  select,
-} from "d3";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { axisBottom, axisLeft, extent, scaleLinear, scalePoint } from "d3";
 
 import styles from "./BarChart.module.css";
+import useD3Selection from "./useD3Selection";
 
 // Hard coding the x axis height - without line breaks, this
 // is probably ok
@@ -36,17 +24,19 @@ const BarChart: React.FC<Props> = ({ data }) => {
   const [tickWidth, setTickWidth] = useState(0);
   const [yAxisWidth, setYAxisWidth] = useState(0);
 
-  const svgRoot = useRef<SVGSVGElement | null>(null);
-  const xAxisElement = useRef<SVGGElement | null>(null);
-  const yAxisElement = useRef<SVGGElement | null>(null);
-  const plotAreaElement = useRef<SVGGElement | null>(null);
+  const [svgRootSelection, setSvgRootElement] = useD3Selection<SVGSVGElement>();
+  const [xAxisSelection, setXAxisElement] = useD3Selection<SVGGElement>();
+  const [yAxisSelection, setYAxisElement] = useD3Selection<SVGGElement>();
+  const [plotAreaSelection, setPlotAreaElement] = useD3Selection<SVGGElement>();
 
   const xScale = useMemo(() => scalePoint<number>(), []);
   const yScale = useMemo(() => scaleLinear(), []);
   const xAxis = useMemo(() => axisBottom(xScale), [xScale]);
   const yAxis = useMemo(() => axisLeft(yScale), [yScale]);
 
-  const { width, height } = svgRoot.current?.getBoundingClientRect() ?? {
+  const { width, height } = svgRootSelection
+    ?.node()
+    ?.getBoundingClientRect() ?? {
     width: 0,
     height: 0,
   };
@@ -70,19 +60,19 @@ const BarChart: React.FC<Props> = ({ data }) => {
 
   useLayoutEffect(() => {
     if (
-      !svgRoot.current ||
-      !xAxisElement.current ||
-      !yAxisElement.current ||
-      !plotAreaElement.current
+      !svgRootSelection ||
+      !xAxisSelection ||
+      !yAxisSelection ||
+      !plotAreaSelection
     ) {
       return;
     }
 
-    yScale.range([height - X_AXIS_HEIGHT, 0]);
+    yScale.range([height - X_AXIS_HEIGHT, 0]).nice();
 
     // Render the Y axis, measure it, and resize the X axis accordingly
-    select(yAxisElement.current).call(yAxis);
-    const yAxisWidth = yAxisElement.current.getBBox().width;
+    yAxisSelection.call(yAxis);
+    const yAxisWidth = yAxisSelection.node()?.getBBox().width ?? 0;
     const plotAreaWidth = width - yAxisWidth;
     const tickWidth = plotAreaWidth / (data.length || 1);
 
@@ -92,7 +82,7 @@ const BarChart: React.FC<Props> = ({ data }) => {
       i % tickLabelFrequency === 0 ? i.toString() : ""
     );
 
-    select(xAxisElement.current)
+    xAxisSelection
       .call(xAxis)
       .selectAll(".tick text")
       .attr("transform", `translate(${tickWidth / 2} 0)`);
@@ -101,7 +91,19 @@ const BarChart: React.FC<Props> = ({ data }) => {
     setYAxisWidth(yAxisWidth);
     setPlotAreaWidth(plotAreaWidth);
     setTickWidth(tickWidth);
-  }, [width, height, yScale, yAxis, xScale, xAxis, data]);
+  }, [
+    width,
+    height,
+    yScale,
+    yAxis,
+    xScale,
+    xAxis,
+    data,
+    xAxisSelection,
+    yAxisSelection,
+    plotAreaSelection,
+    svgRootSelection,
+  ]);
 
   useEffect(() => {
     // Update state to trigger a re-render on resize. Will be a better way
@@ -114,10 +116,15 @@ const BarChart: React.FC<Props> = ({ data }) => {
   }, []);
 
   return (
-    <svg className={styles.chart} ref={svgRoot} width={width} height={height}>
+    <svg
+      className={styles.chart}
+      ref={setSvgRootElement}
+      width={width}
+      height={height}
+    >
       <g
         className="plot-area"
-        ref={plotAreaElement}
+        ref={setPlotAreaElement}
         transform={`translate(${yAxisWidth} 0)`}
       >
         {data.map((d, i) => (
@@ -133,12 +140,12 @@ const BarChart: React.FC<Props> = ({ data }) => {
       </g>
       <g
         className="x-axis"
-        ref={xAxisElement}
+        ref={setXAxisElement}
         transform={`translate(${yAxisWidth} ${xOrigin})`}
       />
       <g
         className="y-axis"
-        ref={yAxisElement}
+        ref={setYAxisElement}
         transform={`translate(${yAxisWidth} 0)`}
       />
     </svg>

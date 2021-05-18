@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { axisBottom, axisLeft, extent, scaleLinear, scalePoint } from "d3";
 
 import styles from "./BarChart.module.css";
@@ -20,19 +20,9 @@ interface Props {
 const BarChart: React.FC<Props> = ({ data }) => {
   const [, renderToggle] = useState(false);
 
-  const [plotAreaWidth, setPlotAreaWidth] = useState(0);
-  const [tickWidth, setTickWidth] = useState(0);
-  const [yAxisWidth, setYAxisWidth] = useState(0);
-
   const [svgRootSelection, setSvgRootElement] = useD3Selection<SVGSVGElement>();
   const [xAxisSelection, setXAxisElement] = useD3Selection<SVGGElement>();
   const [yAxisSelection, setYAxisElement] = useD3Selection<SVGGElement>();
-  const [plotAreaSelection, setPlotAreaElement] = useD3Selection<SVGGElement>();
-
-  const xScale = useMemo(() => scalePoint<number>(), []);
-  const yScale = useMemo(() => scaleLinear(), []);
-  const xAxis = useMemo(() => axisBottom(xScale), [xScale]);
-  const yAxis = useMemo(() => axisLeft(yScale), [yScale]);
 
   const { width, height } = svgRootSelection
     ?.node()
@@ -40,70 +30,55 @@ const BarChart: React.FC<Props> = ({ data }) => {
     width: 0,
     height: 0,
   };
-  const xOrigin = yScale(0);
 
-  xScale.range([0, plotAreaWidth]);
-
-  // Update scales as required
-  useLayoutEffect(() => {
-    xScale.domain(
-      Array(data.length + 1)
-        .fill(0)
-        .map((d, i) => i)
-    );
+  const yScale = useMemo(() => {
+    const scale = scaleLinear()
+      .range([height - X_AXIS_HEIGHT, 0])
+      .nice();
 
     const yExtent = extent(data);
     if (validateExtent(yExtent)) {
-      yScale.domain([Math.min(0, yExtent[0]), yExtent[1]]);
-    }
-  }, [data, xScale, yScale, xAxis, yAxis]);
-
-  useLayoutEffect(() => {
-    if (
-      !svgRootSelection ||
-      !xAxisSelection ||
-      !yAxisSelection ||
-      !plotAreaSelection
-    ) {
-      return;
+      scale.domain([Math.min(0, yExtent[0]), yExtent[1]]);
     }
 
-    yScale.range([height - X_AXIS_HEIGHT, 0]).nice();
+    return scale;
+  }, [height, data]);
+  const yAxis = useMemo(() => axisLeft(yScale), [yScale]);
 
-    // Render the Y axis, measure it, and resize the X axis accordingly
-    yAxisSelection.call(yAxis);
-    const yAxisWidth = yAxisSelection.node()?.getBBox().width ?? 0;
-    const plotAreaWidth = width - yAxisWidth;
-    const tickWidth = plotAreaWidth / (data.length || 1);
+  const xOrigin = yScale(0);
 
-    // Reduce the number of tick labels to 1 per 100px
-    const tickLabelFrequency = tickWidth < 100 ? Math.ceil(100 / tickWidth) : 1;
-    xAxis.tickFormat((d, i) =>
-      i % tickLabelFrequency === 0 ? i.toString() : ""
-    );
+  // Render the Y axis, measure it, and configure the X axis dimensions
+  // based in the Y axis' size.
+  yAxisSelection?.call(yAxis);
 
-    xAxisSelection
-      .call(xAxis)
-      .selectAll(".tick text")
-      .attr("transform", `translate(${tickWidth / 2} 0)`);
+  const yAxisWidth = yAxisSelection?.node()?.getBBox().width ?? 0;
+  const plotAreaWidth = width - yAxisWidth;
+  const tickWidth = plotAreaWidth / (data.length || 1);
+  const tickLabelFrequency = tickWidth < 100 ? Math.ceil(100 / tickWidth) : 1;
 
-    // Update react state, triggers re-render if different.
-    setYAxisWidth(yAxisWidth);
-    setPlotAreaWidth(plotAreaWidth);
-    setTickWidth(tickWidth);
-  }, [
-    width,
-    height,
-    yScale,
-    yAxis,
-    xScale,
-    xAxis,
-    data,
-    xAxisSelection,
-    yAxisSelection,
-    plotAreaSelection,
-    svgRootSelection,
-  ]);
+  const xScale = useMemo(
+    () =>
+      scalePoint<number>()
+        .domain(
+          Array(data.length + 1)
+            .fill(0)
+            .map((d, i) => i)
+        )
+        .range([0, plotAreaWidth]),
+    [data, plotAreaWidth]
+  );
+  const xAxis = useMemo(
+    () =>
+      axisBottom(xScale).tickFormat((d, i) =>
+        i % tickLabelFrequency === 0 ? i.toString() : ""
+      ),
+    [xScale, tickLabelFrequency]
+  );
+
+  xAxisSelection
+    ?.call(xAxis)
+    .selectAll(".tick text")
+    .attr("transform", `translate(${tickWidth / 2} 0)`);
 
   useEffect(() => {
     // Update state to trigger a re-render on resize. Will be a better way
@@ -122,11 +97,7 @@ const BarChart: React.FC<Props> = ({ data }) => {
       width={width}
       height={height}
     >
-      <g
-        className="plot-area"
-        ref={setPlotAreaElement}
-        transform={`translate(${yAxisWidth} 0)`}
-      >
+      <g className="plot-area" transform={`translate(${yAxisWidth} 0)`}>
         {data.map((d, i) => (
           <rect
             key={i}
